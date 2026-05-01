@@ -26,8 +26,10 @@ project
       <library>$(boost_dependencies_private)
       <library>/boost/context//boost_context
       <library>/boost/filesystem//boost_filesystem
-      <target-os>solaris:<linkflags>"-llgrp"
-      <target-os>windows:<define>_WIN32_WINNT=0x0601
+       <target-os>solaris:<linkflags>"-llgrp"
+       <target-os>windows:<define>_WIN32_WINNT=0x0601
+       <target-os>linux:<linkflags>-luring
+       <target-os>linux:<define>BOOST_FIBERS_USE_LIBURING
       <target-os>linux,<toolset>gcc,<segmented-stacks>on:<cxxflags>-fsplit-stack
       <target-os>linux,<toolset>gcc,<segmented-stacks>on:<cxxflags>-DBOOST_USE_SEGMENTED_STACKS
       <toolset>clang,<segmented-stacks>on:<cxxflags>-fsplit-stack

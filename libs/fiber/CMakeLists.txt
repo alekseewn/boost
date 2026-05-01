@@ -57,6 +57,33 @@ target_link_libraries(boost_fiber
     Boost::smart_ptr
 )
 
+# Find liburing
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+  pkg_check_modules(LIBURING liburing QUIET)
+endif()
+if(NOT LIBURING_FOUND)
+  find_library(LIBURING_LIBRARY NAMES uring)
+  if(LIBURING_LIBRARY)
+    set(LIBURING_FOUND TRUE)
+  endif()
+endif()
+
+if(LIBURING_FOUND)
+  target_compile_definitions(boost_fiber PRIVATE BOOST_FIBERS_USE_LIBURING)
+  if(LIBURING_INCLUDE_DIRS)
+    target_include_directories(boost_fiber PRIVATE ${LIBURING_INCLUDE_DIRS})
+  endif()
+  if(LIBURING_LIBRARIES)
+    target_link_libraries(boost_fiber PRIVATE ${LIBURING_LIBRARIES})
+  else()
+    target_link_libraries(boost_fiber PRIVATE ${LIBURING_LIBRARY})
+  endif()
+  message(STATUS "Boost.Fiber: liburing support enabled")
+else()
+  message(STATUS "Boost.Fiber: liburing not found, support disabled")
+endif()
+
 target_compile_features(boost_fiber PUBLIC cxx_std_11)
 
 target_compile_definitions(boost_fiber
