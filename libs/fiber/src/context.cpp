@@ -83,7 +83,7 @@ struct context_initializer {
 
     ~context_initializer() {
         if ( 0 == --counter_) {
-            deinitialize();
+            // deinitialize();
         }
     }
 
