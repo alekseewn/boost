@@ -9,14 +9,9 @@
 #include <cstdlib>
 #include <mutex>
 #include <new>
-
 #include "boost/fiber/exceptions.hpp"
 #include "boost/fiber/scheduler.hpp"
 #include "boost/fiber/algo/round_robin.hpp"
-
-#if defined(__linux__) && defined(BOOST_FIBERS_USE_LIBURING)
-#include <liburing.h>
-#endif
 
 #ifdef BOOST_HAS_ABI_HEADERS
 #  include BOOST_ABI_PREFIX

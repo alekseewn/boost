@@ -1,46 +1,40 @@
 #include <iostream>
+#include <thread>
+#include <fcntl.h>
+#include <unistd.h>
+#include <cstring>
 #include <boost/fiber/fiber.hpp>
 #include <boost/fiber/operations.hpp>
-#include <boost/fiber/mutex.hpp>
-#include <boost/fiber/condition_variable.hpp>
 #include <boost/fiber/algo/work_stealing.hpp>
-#include <thread>
+#include <boost/fiber/io_uring.hpp>
 
-struct Env {
-    Env() {
-        worker = std::thread(
-        [this]{
-            boost::fibers::use_scheduling_algorithm<boost::fibers::algo::work_stealing>(2);
-            std::cout << "WORKER" << std::endl;
-            mtx.lock();
-            cv.wait(mtx);
-            mtx.unlock();
-        });
+void fiber_task() {
+    int fd = open("/tmp/boost_fiber_test", O_RDONLY);
+    if (fd < 0) { perror("open"); return; }
 
-    }
-
-    ~Env() {
-        std::cout << "~ENV" << std::endl;
-        cv.notify_all();
-        worker.join();
-    }
-
-    std::thread worker;
-    boost::fibers::mutex mtx;
-    boost::fibers::condition_variable_any cv;
-
-};
-
-void fiber_func() {
-    std::cout << "Hello from fiber!" << std::endl;
+    char buf[256] = {};
+    int n = boost::fibers::io_uring::read(fd, buf, sizeof(buf));
+    std::cerr << "read returned " << n << " bytes: " << buf << std::endl;
+    close(fd);
 }
 
-static Env env;
-
 int main() {
-    boost::fibers::use_scheduling_algorithm<boost::fibers::algo::work_stealing>(2);
-    boost::fibers::fiber f(fiber_func);
-    std::cout << "Hello from main!" << std::endl;
+    int fd = open("/tmp/boost_fiber_test", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+    const char * msg = "Hello from io_uring in Boost.Fiber!";
+    write(fd, msg, std::strlen(msg));
+    close(fd);
+
+    boost::fibers::use_scheduling_algorithm<
+        boost::fibers::algo::work_stealing>(1);
+
+    boost::fibers::fiber f(fiber_task);
+    boost::fibers::fiber g([](){
+        int fn = open("test_file", O_CREAT | O_WRONLY | O_TRUNC, 0644);
+        boost::fibers::io_uring::write(fn, "hello!!!!", 9);
+    });
+    g.join();
     f.join();
+
+    unlink("/tmp/boost_fiber_test");
     return 0;
 }
