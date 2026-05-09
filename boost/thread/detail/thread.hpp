@@ -6,6 +6,7 @@
 // (C) Copyright 2007-2010 Anthony Williams
 // (C) Copyright 2011-2012 Vicente J. Botet Escriba
 
+#include "boost/thread/pthread/thread_data.hpp"
 #include <boost/thread/detail/config.hpp>
 #include <boost/predef/platform.h>
 
