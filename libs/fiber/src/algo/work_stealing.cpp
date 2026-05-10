@@ -11,7 +11,6 @@
 
 #include <boost/assert.hpp>
 #include <boost/context/detail/prefetch.hpp>
-
 #include "boost/fiber/detail/thread_barrier.hpp"
 #include "boost/fiber/type.hpp"
 
@@ -25,6 +24,8 @@ namespace algo {
 
 std::atomic< std::uint32_t > work_stealing::counter_{ 0 };
 std::vector< intrusive_ptr< work_stealing > > work_stealing::schedulers_{};
+
+thread_local work_stealing * work_stealing::current_{ nullptr };
 
 void
 work_stealing::init_( std::uint32_t thread_count,
@@ -44,6 +45,13 @@ work_stealing::work_stealing( std::uint32_t thread_count, bool suspend) :
     // register pointer of this scheduler
     schedulers_[id_] = this;
     b.wait();
+
+    ring_entries_ = 1024;
+    int ret = io_uring_queue_init(ring_entries_, &ring_, 0);
+    if (ret < 0) {
+        std::abort();
+    }
+    current_ = this;
 }
 
 void
@@ -62,7 +70,7 @@ work_stealing::pick_next() noexcept {
         if ( ! victim->is_context( type::pinned_context) ) {
             context::active()->attach( victim);
         }
-    } else {
+    } else if (schedulers_.size() > 1) {
         std::uint32_t id = 0;
         std::size_t count = 0, size = schedulers_.size();
         static thread_local std::minstd_rand generator{ std::random_device{}() };
@@ -90,26 +98,72 @@ work_stealing::pick_next() noexcept {
 
 void
 work_stealing::suspend_until( std::chrono::steady_clock::time_point const& time_point) noexcept {
+    io_uring_submit(&ring_);
+    process_cqes_();
+    if (has_ready_fibers()) return;
+
     if ( suspend_) {
-        if ( (std::chrono::steady_clock::time_point::max)() == time_point) {
-            std::unique_lock< std::mutex > lk{ mtx_ };
-            cnd_.wait( lk, [this](){ return flag_; });
-            flag_ = false;
+        struct io_uring_cqe * cqe = nullptr;
+        if ((std::chrono::steady_clock::time_point::max)() == time_point) {
+            io_uring_wait_cqe(&ring_, &cqe);
         } else {
-            std::unique_lock< std::mutex > lk{ mtx_ };
-            cnd_.wait_until( lk, time_point, [this](){ return flag_; });
-            flag_ = false;
+            auto nsec = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                time_point.time_since_epoch()).count();
+            __kernel_timespec ts{
+                static_cast<__kernel_time_t>(nsec / 1000000000ULL),
+                static_cast<__kernel_long_t>(nsec % 1000000000ULL)
+            };
+            io_uring_wait_cqe_timeout(&ring_, &cqe, &ts);
         }
+        if (cqe) process_cqes_();
     }
+    // if ( suspend_) {
+    //     if ( (std::chrono::steady_clock::time_point::max)() == time_point) {
+    //         std::unique_lock< std::mutex > lk{ mtx_ };
+    //         cnd_.wait( lk, [this](){ return flag_; });
+    //         flag_ = false;
+    //     } else {
+    //         std::unique_lock< std::mutex > lk{ mtx_ };
+    //         cnd_.wait_until( lk, time_point, [this](){ return flag_; });
+    //         flag_ = false;
+    //     }
+    // }
 }
 
 void
 work_stealing::notify() noexcept {
-    if ( suspend_) {
-        std::unique_lock< std::mutex > lk{ mtx_ };
-        flag_ = true;
-        lk.unlock();
-        cnd_.notify_all();
+    io_uring_sqe * sqe = io_uring_get_sqe(&ring_);
+    if (sqe) {
+        io_uring_prep_nop(sqe);
+        sqe->user_data = 0;
+    }
+    io_uring_submit(&ring_);
+//     if ( suspend_) {
+//         std::unique_lock< std::mutex > lk{ mtx_ };
+//         flag_ = true;
+//         lk.unlock();
+//         cnd_.notify_all();
+//     }
+}
+
+void
+work_stealing::process_cqes_() noexcept {
+    unsigned head;
+    unsigned count = 0;
+    struct io_uring_cqe * cqe;
+
+    io_uring_for_each_cqe(&ring_, head, cqe) {
+        ++count;
+        if (cqe->user_data == 0) continue;
+
+        auto * op = reinterpret_cast<iouring_op *>(
+            static_cast<uintptr_t>(cqe->user_data));
+        op->result = cqe->res;
+        awakened(op->ctx);
+    }
+
+    if (count > 0) {
+        io_uring_cq_advance(&ring_, count);
     }
 }
 

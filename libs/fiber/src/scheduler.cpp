@@ -303,7 +303,6 @@ scheduler::wait_until( context * ctx,
 
 void
 scheduler::suspend() noexcept {
-    // resume another context
     algo_->pick_next()->resume();
 }
 

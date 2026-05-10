@@ -25,6 +25,7 @@
 #include <boost/fiber/detail/context_spinlock_queue.hpp>
 #include <boost/fiber/detail/context_spmc_queue.hpp>
 #include <boost/fiber/scheduler.hpp>
+#include <liburing.h>
 
 #ifdef BOOST_HAS_ABI_HEADERS
 #  include BOOST_ABI_PREFIX
@@ -50,6 +51,28 @@ private:
     std::condition_variable                                 cnd_{};
     bool                                                    flag_{ false };
     bool                                                    suspend_;
+
+public:
+    struct iouring_op {
+        context*    ctx;
+        int         result;
+    };
+
+    static thread_local work_stealing *                    current_;
+
+    io_uring & get_ring() noexcept {
+        return ring_;
+    }
+
+    static work_stealing * current() noexcept {
+        return current_;
+    }
+
+private:
+    io_uring                                                ring_{};
+    std::uint32_t                                           ring_entries_;
+
+    void process_cqes_() noexcept;
 
     static void init_( std::uint32_t, std::vector< intrusive_ptr< work_stealing > > &);
 

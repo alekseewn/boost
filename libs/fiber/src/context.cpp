@@ -9,7 +9,6 @@
 #include <cstdlib>
 #include <mutex>
 #include <new>
-
 #include "boost/fiber/exceptions.hpp"
 #include "boost/fiber/scheduler.hpp"
 #include "boost/fiber/algo/round_robin.hpp"
@@ -83,7 +82,7 @@ struct context_initializer {
 
     ~context_initializer() {
         if ( 0 == --counter_) {
-            deinitialize();
+            // deinitialize();
         }
     }
 
