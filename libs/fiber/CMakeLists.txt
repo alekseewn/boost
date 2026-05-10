@@ -28,6 +28,7 @@ add_library(boost_fiber
   src/algo/round_robin.cpp
   src/algo/shared_work.cpp
   src/algo/work_stealing.cpp
+  src/io_uring.cpp
   src/barrier.cpp
   src/condition_variable.cpp
   src/context.cpp

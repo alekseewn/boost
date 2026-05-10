@@ -25,10 +25,7 @@
 #include <boost/fiber/detail/context_spinlock_queue.hpp>
 #include <boost/fiber/detail/context_spmc_queue.hpp>
 #include <boost/fiber/scheduler.hpp>
-
-#if defined(__linux__) && defined(BOOST_FIBERS_USE_LIBURING)
 #include <liburing.h>
-#endif
 
 #ifdef BOOST_HAS_ABI_HEADERS
 #  include BOOST_ABI_PREFIX
@@ -55,7 +52,6 @@ private:
     bool                                                    flag_{ false };
     bool                                                    suspend_;
 
-#if defined(__linux__) && defined(BOOST_FIBERS_USE_LIBURING)
 public:
     struct iouring_op {
         context*    ctx;
@@ -77,7 +73,6 @@ private:
     std::uint32_t                                           ring_entries_;
 
     void process_cqes_() noexcept;
-#endif
 
     static void init_( std::uint32_t, std::vector< intrusive_ptr< work_stealing > > &);
 
